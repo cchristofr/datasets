@@ -329,10 +329,7 @@ def main(input_filepath: str = "french_companies.csv",
         if col not in companies_df.columns:
             print(f"Warning: Expected input column '{col}' not found. Adding as empty string column.")
             companies_df[col] = ''
-        # Process columns to ensure they are string and 'nan' or actual NaNs are empty strings
-        # The keep_default_na=False and na_filter=False in read_csv should mean we get empty strings directly for missing fields.
-        # However, explicit conversion is safer for columns that might have mixed types or actual 'nan' strings.
-        companies_df[col] = companies_df[col].astype(str).replace('nan', '', regex=False).replace('NaN', '', regex=False)
+        companies_df[col] = companies_df[col].fillna('').astype(str).replace('nan', '', regex=False).replace('NaN', '', regex=False)
 
 
     output_column_names = [
@@ -365,7 +362,9 @@ def main(input_filepath: str = "french_companies.csv",
     if out_col_siren in companies_df.columns:
          companies_df.sort_values(by=[out_col_siren, out_col_siret], inplace=True, na_position='last')
 
-    print("\nProcessed DataFrame head (final test run):")
+    # This print statement is for when running in test mode or for general verbosity.
+    # It might be too verbose for production file processing unless needed for a log.
+    print("\nProcessed DataFrame head (final structure):")
     key_input_cols_for_display = [
         col_supplier_name, col_address_street, col_address_city, col_address_postal_code,
         col_tax_num1
@@ -378,37 +377,45 @@ def main(input_filepath: str = "french_companies.csv",
 
     if not test_data_csv_string:
         save_data(companies_df, output_filepath)
+        print(f"File processing complete. Output saved to '{output_filepath}'.")
 
     return companies_df
 
-# --- Script Execution (Final Test Run) ---
+# --- Script Execution ---
 if __name__ == "__main__":
-    # Using a list of strings joined by newline for clarity and precise comma control.
-    # Each data line must have 10 commas for 11 fields.
-    # All empty fields are explicitly represented as "" for clarity with read_csv.
-    csv_lines = [
-        "Supplier,PO Box,Street,City,PostalCode,Region,Cty,Tax Number 1,Tax Number 2,VAT Registration No.,Tax Number",
-        '"Company A (SIREN TN1)","","1 Rue Principale","Paris","75001","IDF","FR","111111111","","FRXX111111111",""',
-        '"Company B (SIRET TN1)","","2 Avenue Libération","Lyon","69002","ARA","FR","22222222222222","","FRYY222222222",""',
-        '"Company C (SIREN TN2)","","3 Place Victoire","Bordeaux","33001","NAQ","FR","","333333333","FRZZ333333333",""',
-        '"Company D (SIRET TN2)","","4 Boulevard Voltaire","Lille","59000","HDF","FR","","44444444444444","FRAA444444444",""',
-        '"Company E (SIREN VAT)","","5 Chemin Vert","Nantes","44001","PDL","FR","invalid","invalid","FRBB555555555",""',
-        '"Company F (SIREN GenTax)","","6 Allée Bleue","Strasbourg","67001","GE","FR","invalid","invalid","","FRCC666666666"',
-        '"Company G (Invalid ID)","","7 Impasse Rouge","Nice","06001","PACA","FR","123","456","FRDD12345","badID"',
-        '"Company H (Duplicate SIRET B)","","8 Rue Secondaire","Lyon","69002","ARA","FR","22222222222222","","FRYY222222222",""',
-        '"Company A (Name/Addr Dup)","","1 Rue Principale","Paris","75001","IDF","FR","999111111","","",""',
-        '"Company I (No Address)","","","","","","FR","777777777","","",""',
-        '"Company J (Foreign)","","10 Downing Street","London","","UK","GB123456789","","","",""',
-        '"Company K (SIREN .0)","","11 Rue Neuve","Paris","75010","IDF","FR","888888888.0","","",""'
-    ]
-    SAMPLE_CSV_DATA_NEW_FORMAT = "\n".join(csv_lines)
+    # Default behavior: Process a CSV file as defined in main() defaults.
+    # This will typically look for "french_companies.csv" and save "french_companies_processed.csv".
+    print("Running in standard file processing mode.")
+    main()
 
-    print("--- Starting Final Test Run with Comprehensive Sample Data ---")
-    processed_df = main(test_data_csv_string=SAMPLE_CSV_DATA_NEW_FORMAT)
+    # --- For testing with in-memory sample data ---
+    # To run with the sample data string below, comment out the `main()` call above,
+    # and uncomment the following lines:
 
-    if processed_df is not None:
-        print("\n--- Full Processed DataFrame (CSV Output for Final Report) ---")
-        print(processed_df.to_csv(index=False))
-        print("--- End of Final Test Run ---")
-    else:
-        print("--- Final Test Run Failed: No DataFrame was processed. ---")
+    # print("\n--- Starting Test Run with Comprehensive Sample Data ---")
+    # # Using a list of strings joined by newline for clarity and precise comma control.
+    # # Each data line must have 10 commas for 11 fields.
+    # # All empty fields are explicitly represented as "" for clarity with read_csv.
+    # csv_lines = [
+    #     "Supplier,PO Box,Street,City,PostalCode,Region,Cty,Tax Number 1,Tax Number 2,VAT Registration No.,Tax Number",
+    #     '"Company A (SIREN TN1)","","1 Rue Principale","Paris","75001","IDF","FR","111111111","","FRXX111111111",""',
+    #     '"Company B (SIRET TN1)","","2 Avenue Libération","Lyon","69002","ARA","FR","22222222222222","","FRYY222222222",""',
+    #     '"Company C (SIREN TN2)","","3 Place Victoire","Bordeaux","33001","NAQ","FR","","333333333","FRZZ333333333",""',
+    #     '"Company D (SIRET TN2)","","4 Boulevard Voltaire","Lille","59000","HDF","FR","","44444444444444","FRAA444444444",""',
+    #     '"Company E (SIREN VAT)","","5 Chemin Vert","Nantes","44001","PDL","FR","invalid","invalid","FRBB555555555",""',
+    #     '"Company F (SIREN GenTax)","","6 Allée Bleue","Strasbourg","67001","GE","FR","invalid","invalid","","FRCC666666666"',
+    #     '"Company G (Invalid ID)","","7 Impasse Rouge","Nice","06001","PACA","FR","123","456","FRDD12345","badID"',
+    #     '"Company H (Duplicate SIRET B)","","8 Rue Secondaire","Lyon","69002","ARA","FR","22222222222222","","FRYY222222222",""',
+    #     '"Company A (Name/Addr Dup)","","1 Rue Principale","Paris","75001","IDF","FR","999111111","","",""',
+    #     '"Company I (No Address)","","","","","","FR","777777777","","",""',
+    #     '"Company J (Foreign)","","10 Downing Street","London","","UK","GB123456789","","","",""',
+    #     '"Company K (SIREN .0)","","11 Rue Neuve","Paris","75010","IDF","FR","888888888.0","","",""'
+    # ]
+    # SAMPLE_CSV_DATA_NEW_FORMAT = "\n".join(csv_lines)
+    # processed_df = main(test_data_csv_string=SAMPLE_CSV_DATA_NEW_FORMAT)
+    # if processed_df is not None:
+    #     print("\n--- Full Processed DataFrame (CSV Output for Final Report) ---")
+    #     print(processed_df.to_csv(index=False))
+    #     print("--- End of Final Test Run ---")
+    # else:
+    #     print("--- Final Test Run Failed: No DataFrame was processed. ---")
