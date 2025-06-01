@@ -14,14 +14,14 @@ Mes questions sont :
     *   Si ce candidat unique est **inactif** (selon les données INSEE comme `INSEE_StatutAdministratifUL` ou `INSEE_EtatAdministratifEtablissement`), doit-il :
         *   Option 2.1 : Être écrit dans le **fichier principal enrichi** (`args.output_file`), avec son statut d'inactivité visible grâce aux colonnes INSEE ?
         *   Option 2.2 : Être écrit directement dans le fichier des **entités inactives** (`inactive_matches_insee.csv`), et la ligne dans le fichier principal n'est pas enrichie avec ce candidat (ou reçoit un statut "INSEE: Trouvé inactif") ?
-    *   *Votre préférence (2.1 ou 2.2) ?*
+    *   *Votre préférence (2.1 ou 2.2) ? Réponse : préférence 2.2 en écrivant un statut "INSEE: Trouvé inactif" dans le fichier principal
 
 2.  **Cas de plusieurs candidats trouvés par recherche par nom (ou nom/ville) :**
     *   Si l'API retourne une liste de candidats (un mélange possible d'actifs et d'inactifs) :
-        *   Est-ce que la ligne source originale est dupliquée dans le fichier `multiple_matches_file.csv` (celui pour les "actifs" ou "ambigus") pour **chaque candidat actif** trouvé ?
-        *   ET, est-ce que la ligne source originale est *également* dupliquée dans le nouveau fichier `inactive_matches_insee.csv` pour **chaque candidat inactif** trouvé parmi ces mêmes résultats ?
+        *   Est-ce que la ligne source originale est dupliquée dans le fichier `multiple_matches_file.csv` (celui pour les "actifs" ou "ambigus") pour **chaque candidat actif** trouvé ? Réponse : OUI
+        *   ET, est-ce que la ligne source originale est *également* dupliquée dans le nouveau fichier `inactive_matches_insee.csv` pour **chaque candidat inactif** trouvé parmi ces mêmes résultats ? Réponse : OUI
         *   En d'autres termes, une seule recherche par nom pour une ligne source peut-elle potentiellement alimenter à la fois `multiple_matches_file.csv` (pour ses candidats actifs) et `inactive_matches_insee.csv` (pour ses candidats inactifs) ?
-    *   *Veuillez confirmer cette logique de dispatch ou la corriger.*
+    *   *Veuillez confirmer cette logique de dispatch ou la corriger.* Réponse : C'est logique correcte
 
 **Concernant l'Amélioration 3 (Filtrage par ville pour la recherche par SIREN retournant plusieurs établissements) :**
 
@@ -35,7 +35,7 @@ Mes questions sont :
         *   Doit-on prioriser l'établissement siège (celui où `INSEE_EstSiege` est vrai) ?
         *   S'il n'y a pas de siège clairement identifié parmi les candidats restants, ou s'il y a plusieurs sièges (peu probable mais possible), que fait-on ? Prend-on le premier de la liste ?
         *   Ou bien, dans ce cas d'ambiguïté persistante (plusieurs établissements pour un SIREN, même après tentative de filtre par ville infructueuse), tous ces établissements restants devraient-ils plutôt aller dans le fichier `multiple_matches_file.csv` (s'ils sont actifs) et/ou `inactive_matches_insee.csv` (s'ils sont inactifs), sans qu'aucun n'enrichisse directement la ligne principale ?
-    *   *Veuillez décrire la règle de décision souhaitée dans ce cas.*
+    *   *Veuillez décrire la règle de décision souhaitée dans ce cas.* Réponse : les candidats vont dans les fichiers de correspondances multiples (actifs ou inactifs) en indiquant dans le fichier source un statut "INSEE: Trouvé candidat pour autres villes"
 
 Vos réponses à ces questions me permettront de définir précisément l'algorithme avant de générer le nouveau plan de développement.
 ```
