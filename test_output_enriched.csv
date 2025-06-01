@@ -1,0 +1,8 @@
+Siret,siren,nom_entreprise_normalise,SourceInfo,INSEE_SIRET,INSEE_SIREN_UL,INSEE_DenominationUniteLegale,INSEE_DenominationUsuelleEtablissement,INSEE_Adresse_Complete,INSEE_CodePostalEtablissement,INSEE_LibelleCommuneEtablissement,INSEE_EstSiege,INSEE_NumeroTVA,INSEE_DateSuppressionUniteLegale,INSEE_StatutAdministratifUL,INSEE_EtatAdministratifEtablissement,INSEE_CaractereEmployeurEtablissement,Statut_API_INSEE
+12002701600018,120027016,INSEE SIEGE,Cas1_SIRET_Valide,,120027016,INSTITUT NATIONAL DE LA STATISTIQUE ET DES ETUDES ECONOMIQUES,,,,,,,,,,,OK - SIREN
+,356000000,LA POSTE,Cas2_SIREN_Valide,,356000000,LA POSTE,,,,,,,,,,,OK - SIREN
+,,ENTREPRISE QUI NEXISTE PAS,Cas3_Nom_0_Resultat,,,,,,,,,,,,,,INSEE: Erreur recherche Nom
+,,LE PHARE DE LA BALEINE,Cas4_Nom_1_Resultat,,,,,,,,,,,,,,INSEE: Non trouvé par nom
+,,PIZZA,Cas5_Nom_Multiples_Resultats,,,,,,,,,,,,,,INSEE: Non trouvé par nom
+99999999999999,,TEST SIRET INVALIDE RECHERCHE NOM,Cas6_SIRET_Invalide_Nom,,,,,,,,,,,,,,INSEE: Erreur recherche Nom
+,111111110,TEST SIREN INVALIDE RECHERCHE NOM,Cas7_SIREN_Invalide_Nom,,,,,,,,,,,,,,INSEE: Erreur recherche Nom

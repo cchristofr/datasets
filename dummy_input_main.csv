@@ -1,0 +1,7 @@
+Siret,siren,nom_entreprise_normalise,Supplier,Tax Number 1,Tax Number 2,VAT Registration No.,Tax Number,PO Box,Street,City,PostalCode,Region,Cty
+"22222222222222","222222222","NOM B","Company B","22222222222222","","","","","2 Avenue Libération","Lyon","69002","ARA","FR"
+,"111111111","NOM A","Company A","111111111","","","","","1 Rue Principale","Paris","75001","IDF","FR"
+,,"NOM Z RECHERCHE","Company Z","invalid","invalid","","","","Recherche Addr","Search City","75000","IDF","FR"
+"","","","EmptyData",,,,,,,,,,
+"12345","54321","SHOULD NOT BE CALLED","Company X",,,,,,,,,,
+,,"LA POSTE","La Poste",,,,,,"","","","",""
