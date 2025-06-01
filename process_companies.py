@@ -1,3 +1,4 @@
+# Version 1 permettant de dédoublonner les lignes du fichier. Version 1 avant la version suivante avec l'appel à l'API SIREN
 # Import necessary libraries
 import pandas as pd
 from unidecode import unidecode
