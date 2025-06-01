@@ -54,29 +54,31 @@ def call_insee_api(endpoint_url: str, api_token: str, params: dict = None) -> di
     ensure_api_rate_limit()
     headers = {"Authorization": f"Bearer {api_token}", "Accept": "application/json"}
 
-    param_summary = params.get('q', params) if params and 'q' in params else params
-    param_summary_str = str(param_summary)
-    if len(param_summary_str) > 100:
-        param_summary_str = param_summary_str[:100] + "..."
+    # Prepare request for logging URL
+    session = requests.Session()
+    request = requests.Request('GET', endpoint_url, params=params, headers=headers)
+    prepared_request = session.prepare_request(request) # Use session to prepare for consistency
 
-    print(f"Calling API: {endpoint_url} with params: {param_summary_str if params else 'None (default fields)'}")
+    print(f"INFO: Calling API. Prepared URL: {prepared_request.url}")
 
     try:
-        response = requests.get(endpoint_url, headers=headers, params=params, timeout=20)
+        # Use the session to send the prepared request
+        response = session.send(prepared_request, timeout=20)
+
         if response.status_code == 200:
             try:
                 return response.json()
             except json.JSONDecodeError:
-                print(f"Error: Failed to parse JSON response from API for URL: {endpoint_url}. Response text: {response.text[:200]}...")
+                print(f"Error: Failed to parse JSON response from API for URL: {prepared_request.url}. Response text: {response.text[:200]}...")
                 return None
-        elif response.status_code == 401: print(f"API Erreur 401: Non autorisé (URL: {endpoint_url}). Vérifiez token."); return None
-        elif response.status_code == 403: print(f"API Erreur 403: Interdit (URL: {endpoint_url}). Droits/Token invalide."); return None
-        elif response.status_code == 404: print(f"API Erreur 404: Ressource non trouvée: {endpoint_url}"); return None
-        elif response.status_code == 429: print(f"API Erreur 429: Trop de requêtes (URL: {endpoint_url})."); return None
-        elif response.status_code == 400: print(f"API Erreur 400: Mauvaise requête (URL: {endpoint_url}). Détails: {response.text}"); return None
-        else: print(f"API Erreur {response.status_code} (URL: {endpoint_url}). Réponse: {response.text[:200]}"); return None
-    except requests.exceptions.Timeout: print(f"API Erreur: Timeout (20s) pour URL: {endpoint_url}"); return None
-    except requests.exceptions.RequestException as e: print(f"API Erreur de connexion (URL: {endpoint_url}): {e}"); return None
+        elif response.status_code == 401: print(f"API Erreur 401: Non autorisé (URL: {prepared_request.url}). Vérifiez token."); return None
+        elif response.status_code == 403: print(f"API Erreur 403: Interdit (URL: {prepared_request.url}). Droits/Token invalide."); return None
+        elif response.status_code == 404: print(f"API Erreur 404: Ressource non trouvée: {prepared_request.url}"); return None
+        elif response.status_code == 429: print(f"API Erreur 429: Trop de requêtes (URL: {prepared_request.url})."); return None
+        elif response.status_code == 400: print(f"API Erreur 400: Mauvaise requête (URL: {prepared_request.url}). Détails: {response.text}"); return None
+        else: print(f"API Erreur {response.status_code} (URL: {prepared_request.url}). Réponse: {response.text[:200]}"); return None
+    except requests.exceptions.Timeout: print(f"API Erreur: Timeout (20s) pour URL: {prepared_request.url}"); return None
+    except requests.exceptions.RequestException as e: print(f"API Erreur de connexion (URL: {prepared_request.url}): {e}"); return None
 
 def _build_complete_address(adresse_json: dict | None) -> str:
     """
@@ -186,7 +188,7 @@ def get_data_by_siren(siren: str, api_token: str) -> dict | None:
     response_json = call_insee_api(url, api_token, params=None)
     if response_json and "uniteLegale" in response_json:
         ul_data_raw = response_json["uniteLegale"]
-        parsed_ul_data = parse_unite_legale_data(ul_data_raw) # Base UL data
+        parsed_ul_data = parse_unite_legale_data(ul_data_raw)
 
         siege_etablissement_raw = None
         etablissements_list = ul_data_raw.get("etablissements", [])
@@ -200,36 +202,34 @@ def get_data_by_siren(siren: str, api_token: str) -> dict | None:
             # Fetch full siege details using its SIRET
             siege_details = get_data_by_siret(siege_siret, api_token)
             if siege_details:
-                # The UL data from /siren might be more complete or authoritative for the UL itself.
-                # The UL data nested in /siret/{siege_siret} might be minimal.
-                # So, we prioritize the initially parsed UL data and update it with establishment details.
                 final_data = parsed_ul_data.copy()
-                final_data.update(siege_details) # This will overwrite SIREN from siege_details (same) but add etab fields
+                final_data.update(siege_details)
                 return final_data
             else:
                 print(f"Warning: Failed to fetch full details for siege SIRET {siege_siret}. Using partial data from SIREN call for siege.")
                 return parse_etablissement_data(siege_etablissement_raw, parsed_ul_data)
-        else: # No explicit siege found, or siege has no SIRET
+        else:
             parsed_data = parsed_ul_data
-            if etablissements_list: # If etabs are listed, use first for some address context
+            if etablissements_list:
                  first_etab_raw = etablissements_list[0]
-                 # Augment UL data with minimal details from the first establishment
                  parsed_data["INSEE_SIRET"] = first_etab_raw.get("siret")
                  parsed_data["INSEE_Adresse_Complete"] = _build_complete_address(first_etab_raw.get("adresseEtablissement"))
                  parsed_data["INSEE_CodePostalEtablissement"] = first_etab_raw.get("adresseEtablissement",{}).get("codePostalEtablissement")
                  parsed_data["INSEE_LibelleCommuneEtablissement"] = first_etab_raw.get("adresseEtablissement",{}).get("libelleCommuneEtablissement")
-                 parsed_data["INSEE_DenominationUsuelleEtablissement"] = first_etab_raw.get("denominationUsuelleEtablissement") # Might be null
-                 parsed_data["INSEE_EstSiege"] = False # Mark as not confirmed siege
+                 parsed_data["INSEE_DenominationUsuelleEtablissement"] = first_etab_raw.get("denominationUsuelleEtablissement")
+                 parsed_data["INSEE_EstSiege"] = False # Corrected from parsed_etab to parsed_data
             return parsed_data
     return None
 
 def escape_lucene_value(value: str) -> str:
     """Escapes Lucene special characters in a search term value."""
-    value = str(value).replace('\\', '\\\\')
+    # Ensure value is a string before applying replace
+    value_str = str(value)
+    value_str = value_str.replace('\\', '\\\\')
     special_chars = ['+', '-', '&', '|', '!', '(', ')', '{', '}', '[', ']', '^', '"', '~', '*', '?', ':', '/']
     for char in special_chars:
-        value = value.replace(char, f'\\{char}')
-    return value
+        value_str = value_str.replace(char, f'\\{char}')
+    return value_str
 
 def search_data_by_name(normalized_name: str, api_token: str, only_active: bool = True) -> list[dict] | None:
     """
@@ -261,19 +261,18 @@ def search_data_by_name(normalized_name: str, api_token: str, only_active: bool 
     if response_json and "etablissements" in response_json:
         all_results_parsed = []
         for etab_raw in response_json["etablissements"]:
-            # UL data is nested under each etablissement in search results
             parsed_etab_data = parse_etablissement_data(etab_raw)
             all_results_parsed.append(parsed_etab_data)
 
         if only_active:
             active_results = []
-            # print(f"Info: Applying client-side 'only_active' filter for name search '{normalized_name}'. Found {len(all_results_parsed)} raw results.")
+            # print(f"Info: Applying client-side 'only_active' filter. Found {len(all_results_parsed)} raw results.") # Verbose
             for res in all_results_parsed:
                 ul_status = res.get("INSEE_StatutAdministratifUL")
                 etab_status = res.get("INSEE_EtatAdministratifEtablissement")
                 if str(ul_status) == 'A' and str(etab_status) == 'A':
                     active_results.append(res)
-                # else:
+                # else: # Verbose
                     # print(f"Info: Candidate SIRET {res.get('INSEE_SIRET')} for '{normalized_name}' filtered out (client-side) due to status (UL: {ul_status}, Etab: {etab_status})")
             # print(f"Info: Found {len(active_results)} active results after client-side filtering for '{normalized_name}'.")
             return active_results
@@ -337,7 +336,7 @@ def main():
                 else: status_msg = "INSEE: Erreur recherche Nom"
 
             if pd.isna(status_msg) and processed_data_for_row is None and (siret_val or siren_val or nom_val) :
-                status_msg = "Critères fournis invalides ou API inaccessible" # Or simply "Non trouvé"
+                status_msg = "Critères fournis invalides ou API inaccessible"
 
         if processed_data_for_row:
             for key, value in processed_data_for_row.items():
@@ -355,7 +354,7 @@ def main():
         multiple_matches_df_rows = []
         for item in multiple_matches_accumulator:
             original_row_data = item['original_data']
-            for candidate_data in item['api_candidates']: # These are already filtered if only_active=True
+            for candidate_data in item['api_candidates']:
                 new_row = original_row_data.copy()
                 new_row['original_row_index_in_input'] = item['original_row_index']
                 for key, value in candidate_data.items(): new_row[f"{key}"] = value
@@ -371,9 +370,4 @@ def main():
 if __name__ == "__main__":
     # Default behavior: Expect command-line arguments
     main()
-
-    # --- For direct testing with in-memory sample data (normally commented out) ---
-    # print("--- Initializing Test Run with Main Logic ---")
-    # # ... (sample data and sys.argv manipulation would go here for testing) ...
-    # # main()
 ```
