@@ -1,0 +1,6 @@
+ID,VAT Number,Notes,vies_country_code,vies_vat_number,vies_request_date,vies_valid,vies_name,vies_address,vies_error,vies_retried
+1,FR27839029359,Test VAT 1,FR,27839029359,2025-06-07,False,---,---,,False
+2,LU26375245,Test VAT 2 (Amazon),LU,26375245,2025-06-07,True,AMAZON EUROPE CORE S.A R.L.,"38, AVENUE JOHN F. KENNEDY
+L-1855  LUXEMBOURG",,False
+3,XX123,Trigger INVALID_INPUT,XX,123,,False,,,SOAP Fault: INVALID_INPUT,True
+4,DE111111111,Test VAT 4 (Known invalid),DE,111111111,2025-06-07,False,---,---,,False

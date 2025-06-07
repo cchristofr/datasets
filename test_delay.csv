@@ -1,0 +1,7 @@
+ID,VAT Number,Notes
+1,FR27839029359,Test VAT 1
+2,LU26375245,Test VAT 2 (Amazon)
+3,IE6388047V,Test VAT 3 (Google)
+4,XX123,Invalid format (no API call)
+5,,Empty (no API call)
+6,DE111111111,Test VAT 4 (Known invalid)

@@ -1,7 +1,8 @@
 import argparse
 import zeep
 from zeep.exceptions import Fault
-import csv # Added import
+import csv
+import time
 
 # WSDL URL for the VIES VAT checking service
 VIES_WSDL_URL = 'http://ec.europa.eu/taxation_customs/vies/services/checkVatService.wsdl'
@@ -9,58 +10,87 @@ VIES_WSDL_URL = 'http://ec.europa.eu/taxation_customs/vies/services/checkVatServ
 def check_vat_number(country_code: str, vat_number: str) -> dict:
     """
     Checks the validity of a VAT number using the VIES SOAP service.
-
-    Args:
-        country_code: The two-letter country code (e.g., "FR", "DE").
-        vat_number: The VAT number (without the country code).
-
-    Returns:
-        A dictionary containing the validation result:
-        {
-            'country_code': str,
-            'vat_number': str,
-            'request_date': str, # YYYY-MM-DD
-            'valid': bool,
-            'name': str or None,
-            'address': str or None,
-            'error': str or None # Error message if any
-        }
+    Implements a retry mechanism for specific, transient VIES API errors.
     """
+    RETRYABLE_ERRORS = [
+        "MS_MAX_CONCURRENT_REQ",
+        "GLOBAL_MAX_CONCURRENT_REQ",
+        "MS_UNAVAILABLE",
+        "SERVICE_UNAVAILABLE",
+        "TIMEOUT"
+    ]
+    max_attempts = 2  # Total attempts: initial + 1 retry
+
+    # Ensure country_code is uppercase as per VIES documentation before any API call
+    processed_country_code = country_code.upper()
+
     try:
         client = zeep.Client(wsdl=VIES_WSDL_URL)
-        # Ensure country_code is uppercase as per VIES documentation
-        country_code = country_code.upper()
-        response = client.service.checkVat(countryCode=country_code, vatNumber=vat_number)
+    except Exception as client_init_e:
+        return {
+            'country_code': processed_country_code,
+            'vat_number': vat_number,
+            'request_date': None,
+            'valid': False,
+            'name': None,
+            'address': None,
+            'error': f"Failed to initialize SOAP client: {str(client_init_e)}",
+            'retried': False
+        }
 
-        return {
-            'country_code': response.countryCode,
-            'vat_number': response.vatNumber,
-            'request_date': response.requestDate.strftime('%Y-%m-%d'),
-            'valid': response.valid,
-            'name': response.name if hasattr(response, 'name') and response.name else None,
-            'address': response.address if hasattr(response, 'address') and response.address else None,
-            'error': None
-        }
-    except Fault as fault:
-        return {
-            'country_code': country_code,
-            'vat_number': vat_number,
-            'request_date': None,
-            'valid': False,
-            'name': None,
-            'address': None,
-            'error': f"SOAP Fault: {fault.message}"
-        }
-    except Exception as e:
-        return {
-            'country_code': country_code,
-            'vat_number': vat_number,
-            'request_date': None,
-            'valid': False,
-            'name': None,
-            'address': None,
-            'error': f"An unexpected error occurred: {str(e)}"
-        }
+    for attempt in range(max_attempts):
+        try:
+            response = client.service.checkVat(countryCode=processed_country_code, vatNumber=vat_number)
+            return {
+                'country_code': response.countryCode,
+                'vat_number': response.vatNumber,
+                'request_date': response.requestDate.strftime('%Y-%m-%d'),
+                'valid': response.valid,
+                'name': response.name if hasattr(response, 'name') and response.name else None,
+                'address': response.address if hasattr(response, 'name') and response.address else None,
+                'error': None,
+                'retried': attempt > 0
+            }
+        except Fault as fault:
+            if attempt < max_attempts - 1 and fault.message in RETRYABLE_ERRORS:
+                print(f"Retryable VIES API error for {processed_country_code}{vat_number}: {fault.message}. Attempt {attempt + 1}/{max_attempts}. Retrying in 1 second...")
+                time.sleep(1)
+                continue # Go to the next attempt
+            else: # Last attempt or non-retryable Fault
+                return {
+                    'country_code': processed_country_code,
+                    'vat_number': vat_number,
+                    'request_date': None,
+                    'valid': False,
+                    'name': None,
+                    'address': None,
+                    'error': f"SOAP Fault: {fault.message}",
+                    'retried': attempt > 0
+                }
+        except Exception as e: # Non-Fault exceptions
+            return {
+                'country_code': processed_country_code,
+                'vat_number': vat_number,
+                'request_date': None,
+                'valid': False,
+                'name': None,
+                'address': None,
+                'error': f"An unexpected error occurred: {str(e)}",
+                'retried': attempt > 0 # Retried could be true if a previous attempt was a retryable fault
+            }
+
+    # This part should ideally not be reached if the loop logic is correct and covers all cases.
+    # It acts as a fallback.
+    return {
+        'country_code': processed_country_code,
+        'vat_number': vat_number,
+        'request_date': None,
+        'valid': False,
+        'name': None,
+        'address': None,
+        'error': "Max retries reached or unexpected state after loop",
+        'retried': True # If we exit the loop, it implies all attempts were made.
+    }
 
 def parse_vat_string(full_vat_string: str) -> tuple:
     """
@@ -92,7 +122,8 @@ def process_csv(input_filepath: str, output_filepath: str, vat_column_name: str)
                 return
 
             fieldnames = reader.fieldnames
-            output_fieldnames = fieldnames + ['vies_country_code', 'vies_vat_number', 'vies_request_date', 'vies_valid', 'vies_name', 'vies_address', 'vies_error']
+            # Add 'vies_retried' to output fieldnames
+            output_fieldnames = fieldnames + ['vies_country_code', 'vies_vat_number', 'vies_request_date', 'vies_valid', 'vies_name', 'vies_address', 'vies_error', 'vies_retried']
 
             try:
                 with open(output_filepath, mode='w', newline='', encoding='utf-8') as outfile:
@@ -101,7 +132,12 @@ def process_csv(input_filepath: str, output_filepath: str, vat_column_name: str)
 
                     for row in reader:
                         output_row = row.copy()
-                        vies_data = {key: '' for key in output_fieldnames if key.startswith('vies_')} # Initialize with empty strings
+                        # Initialize all vies_ fields, including vies_retried
+                        vies_data_keys = [key for key in output_fieldnames if key.startswith('vies_')]
+                        vies_data = {key: '' for key in vies_data_keys}
+                        vies_data['vies_valid'] = False # Default valid to False
+                        vies_data['vies_retried'] = False # Default retried to False
+
 
                         full_vat_str = row.get(vat_column_name, "").strip()
 
@@ -111,13 +147,15 @@ def process_csv(input_filepath: str, output_filepath: str, vat_column_name: str)
                             country_code, vat_number_part = parse_vat_string(full_vat_str)
                             if country_code and vat_number_part:
                                 api_response = check_vat_number(country_code, vat_number_part)
-                                vies_data['vies_country_code'] = api_response.get('country_code', country_code) # Use parsed if API fails early
-                                vies_data['vies_vat_number'] = api_response.get('vat_number', vat_number_part) # Use parsed if API fails early
+
+                                vies_data['vies_country_code'] = api_response.get('country_code', country_code)
+                                vies_data['vies_vat_number'] = api_response.get('vat_number', vat_number_part)
                                 vies_data['vies_request_date'] = api_response.get('request_date', '')
                                 vies_data['vies_valid'] = api_response.get('valid', False)
                                 vies_data['vies_name'] = api_response.get('name', '')
                                 vies_data['vies_address'] = api_response.get('address', '')
                                 vies_data['vies_error'] = api_response.get('error', '')
+                                vies_data['vies_retried'] = api_response.get('retried', False) # Get retried status
                             else:
                                 vies_data['vies_error'] = f"Invalid VAT format: {full_vat_str}"
 

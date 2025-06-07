@@ -70,11 +70,12 @@ Company Name,VAT Registration No.,Other Data,vies_country_code,vies_vat_number,v
 "Malformed VAT Inc.","FR 123 456","Data",,,,,,,Invalid VAT format: FR 123 456
 "No VAT Corp","","Empty VAT field",,,,,,,Empty VAT number in source column
 ```
-*(Note: `YYYY-MM-DD`, names, and addresses will vary based on actual VIES data and request time. `vies_valid` is a boolean. `vies_error` will contain API error messages or parsing issues.)*
+*(Note: `YYYY-MM-DD`, names, and addresses will vary based on actual VIES data and request time. `vies_valid` is a boolean. `vies_error` will contain API error messages or parsing issues. The `vies_retried` column (True/False) indicates if the API request for that row was retried due to a transient error.)*
 
 ## How it Works
 
 The script reads each row from your input CSV file. For each row, it extracts the VAT number from the specified column, parses the country code and the number itself, and then queries the European Commission's VIES SOAP service using the `zeep` library. The original data from each row is then combined with the validation results (validity, name, address, etc.) and written to a new row in the output CSV file. Errors during parsing or API communication are logged in the `vies_error` column.
+Additionally, if the script encounters specific transient errors from the VIES API (such as `MS_MAX_CONCURRENT_REQ`, `GLOBAL_MAX_CONCURRENT_REQ`, `MS_UNAVAILABLE`, `SERVICE_UNAVAILABLE`, or `TIMEOUT`), it will automatically attempt the request one more time after a 1-second delay. This can help improve success rates when the VIES service is under heavy load or temporarily unavailable for a specific member state. The `vies_retried` column in the output CSV will indicate if a retry occurred for a given row.
 
 ## Disclaimer
 

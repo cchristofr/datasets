@@ -1,0 +1,8 @@
+ID,VAT Number,Notes,vies_country_code,vies_vat_number,vies_request_date,vies_valid,vies_name,vies_address,vies_error
+1,FR27839029359,Test VAT 1,FR,27839029359,2025-06-07,False,---,---,
+2,LU26375245,Test VAT 2 (Amazon),LU,26375245,2025-06-07,True,AMAZON EUROPE CORE S.A R.L.,"38, AVENUE JOHN F. KENNEDY
+L-1855  LUXEMBOURG",
+3,IE6388047V,Test VAT 3 (Google),IE,6388047V,2025-06-07,True,GOOGLE IRELAND LIMITED,"3RD FLOOR, GORDON HOUSE, BARROW STREET, DUBLIN 4",
+4,XX123,Invalid format (no API call),XX,123,,False,,,SOAP Fault: INVALID_INPUT
+5,,Empty (no API call),,,,,,,Empty VAT number in source column
+6,DE111111111,Test VAT 4 (Known invalid),DE,111111111,2025-06-07,False,---,---,

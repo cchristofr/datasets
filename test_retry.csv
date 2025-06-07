@@ -1,0 +1,5 @@
+ID,VAT Number,Notes
+1,FR27839029359,Test VAT 1
+2,LU26375245,Test VAT 2 (Amazon)
+3,XX123,Trigger INVALID_INPUT
+4,DE111111111,Test VAT 4 (Known invalid)
