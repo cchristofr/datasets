@@ -1,0 +1,13 @@
+Company Name,VAT Registration No.,Other Info
+Test Co Valid,FR27839029359,Info1
+Test Co Invalid DE,DE111111111,Info2
+Test Co Invalid Syntax,FR12345678900,Info3
+Test Co Bad Country,XX123456789,Info4
+Test Co Short VAT,FR1,Info5
+Test Co Empty VAT,,Info6
+Another Valid,LU26375245,Info7
+MS Unavailable Test,PL1234567890,Info8
+Malformed VAT,G12345,Info9
+Company With Space VAT, ES A28017895, Info10
+Valid IE,IE6388047V,Info11
+No VAT Co, ,Info12

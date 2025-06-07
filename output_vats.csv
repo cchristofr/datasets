@@ -1,0 +1,14 @@
+Company Name,VAT Registration No.,Other Info,vies_country_code,vies_vat_number,vies_request_date,vies_valid,vies_name,vies_address,vies_error
+Test Co Valid,FR27839029359,Info1,FR,27839029359,2025-06-07,False,---,---,
+Test Co Invalid DE,DE111111111,Info2,DE,111111111,2025-06-07,False,---,---,
+Test Co Invalid Syntax,FR12345678900,Info3,FR,12345678900,,False,,,SOAP Fault: MS_MAX_CONCURRENT_REQ
+Test Co Bad Country,XX123456789,Info4,XX,123456789,,False,,,SOAP Fault: INVALID_INPUT
+Test Co Short VAT,FR1,Info5,FR,1,2025-06-07,False,---,---,
+Test Co Empty VAT,,Info6,,,,,,,Empty VAT number in source column
+Another Valid,LU26375245,Info7,LU,26375245,2025-06-07,True,AMAZON EUROPE CORE S.A R.L.,"38, AVENUE JOHN F. KENNEDY
+L-1855  LUXEMBOURG",
+MS Unavailable Test,PL1234567890,Info8,PL,1234567890,2025-06-07,False,---,---,
+Malformed VAT,G12345,Info9,,,,,,,Invalid VAT format: G12345
+Company With Space VAT, ES A28017895, Info10,ES, A28017895,2025-06-07,False,---,---,
+Valid IE,IE6388047V,Info11,IE,6388047V,2025-06-07,True,GOOGLE IRELAND LIMITED,"3RD FLOOR, GORDON HOUSE, BARROW STREET, DUBLIN 4",
+No VAT Co, ,Info12,,,,,,,Empty VAT number in source column
