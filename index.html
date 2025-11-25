@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Supprimer les doublons d'un fichier Excel</title>
+</head>
+<body>
+    <h1>Supprimer les doublons d'un fichier Excel</h1>
+    <p>Sélectionnez un fichier Excel (.xlsx) et cliquez sur "Supprimer les doublons" pour télécharger un nouveau fichier sans les lignes en double.</p>
+    <input type="file" id="excelFile" accept=".xlsx" />
+    <button id="processButton">Supprimer les doublons</button>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.5/xlsx.full.min.js"></script>
+    <script>
+        document.getElementById('processButton').addEventListener('click', () => {
+            const fileInput = document.getElementById('excelFile');
+            const file = fileInput.files[0];
+
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    const json = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+                    const uniqueRows = [];
+                    const seen = new Set();
+
+                    for (const row of json) {
+                        const rowString = JSON.stringify(row);
+                        if (!seen.has(rowString)) {
+                            uniqueRows.push(row);
+                            seen.add(rowString);
+                        }
+                    }
+
+                    const newWorksheet = XLSX.utils.aoa_to_sheet(uniqueRows);
+                    const newWorkbook = XLSX.utils.book_new();
+                    XLSX.utils.book_append_sheet(newWorkbook, newWorksheet, firstSheetName);
+                    XLSX.writeFile(newWorkbook, 'fichier_sans_doublons.xlsx');
+                };
+                reader.readAsArrayBuffer(file);
+            } else {
+                alert("Veuillez sélectionner un fichier Excel.");
+            }
+        });
+    </script>
+</body>
+</html>
