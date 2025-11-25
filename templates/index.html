@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Comparateur de Données d'Entreprise</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <h1>Comparer les Données d'Entreprise</h1>
+    <form method="post" enctype="multipart/form-data">
+        <label for="original">Fichier Original:</label>
+        <input type="file" id="original" name="original_file" accept=".csv" required>
+        <br><br>
+        <label for="corrected">Fichier Corrigé:</label>
+        <input type="file" id="corrected" name="corrected_file" accept=".csv" required>
+        <br><br>
+        <button type="submit">Comparer</button>
+    </form>
+</body>
+</html>
