@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Résultats de la Comparaison</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <h1>Résultats de la Comparaison</h1>
+    <a href="/">Nouvelle Comparaison</a>
+    <br><br>
+    <table>
+        <thead>
+            <tr>
+                <th>Statut</th>
+                {% for header in headers %}
+                    <th>{{ header }} (Original)</th>
+                {% endfor %}
+                {% for header in header_corrected %}
+                    <th>{{ header }} (Corrigé)</th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in diff %}
+                <tr class="status-{{ row.status }}">
+                    <td>{{ row.status }}</td>
+                    {% for cell in row.original %}
+                        <td>{{ cell }}</td>
+                    {% endfor %}
+                    {% for cell in row.corrected %}
+                        <td>{{ cell }}</td>
+                    {% endfor %}
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</body>
+</html>

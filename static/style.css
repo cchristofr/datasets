@@ -1,0 +1,34 @@
+body {
+    font-family: sans-serif;
+    margin: 2em;
+}
+
+h1 {
+    color: #333;
+}
+
+form {
+    margin-bottom: 2em;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+th, td {
+    padding: 0.5em;
+    border: 1px solid #ccc;
+}
+
+.status-modifiée {
+    background-color: #fffbe6;
+}
+
+.status-ajoutée {
+    background-color: #e6ffed;
+}
+
+.status-supprimée {
+    background-color: #ffe6e6;
+}
