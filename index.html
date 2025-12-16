@@ -324,22 +324,25 @@
 
             const decision = decisions[index] ? decisions[index].status : null;
 
-            // Clear previous state
             const existingBadge = card.querySelector('.decision-badge');
             if (existingBadge) existingBadge.remove();
-            card.style.backgroundColor = '';
-            card.querySelector(`#accept-${index}`).classList.remove('green', 'lighten-3');
-            card.querySelector(`#refuse-${index}`).classList.remove('red', 'lighten-3');
 
+            const acceptBtn = card.querySelector(`#accept-${index}`);
+            const refuseBtn = card.querySelector(`#refuse-${index}`);
 
+            // Reset buttons to their default state
+            acceptBtn.className = 'btn-small waves-effect waves-light green';
+            refuseBtn.className = 'btn-small waves-effect waves-light red';
+
+            // Apply new state
             if (decision === 'Accepted') {
                 const badge = `<span class="decision-badge green">Accepté</span>`;
                 card.querySelector('h5').insertAdjacentHTML('beforeend', badge);
-                card.querySelector(`#accept-${index}`).classList.add('green', 'lighten-3');
+                acceptBtn.className = 'btn-small waves-effect waves-light grey';
             } else if (decision === 'Refused') {
                 const badge = `<span class="decision-badge red">Refusé</span>`;
                 card.querySelector('h5').insertAdjacentHTML('beforeend', badge);
-                card.querySelector(`#refuse-${index}`).classList.add('red', 'lighten-3');
+                refuseBtn.className = 'btn-small waves-effect waves-light grey';
             }
         }
 
