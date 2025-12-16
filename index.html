@@ -165,13 +165,16 @@
                     const worksheet = workbook.Sheets[firstSheetName];
                     fullData = XLSX.utils.sheet_to_json(worksheet);
 
-                    // Load decisions from localStorage
-                    const savedDecisions = localStorage.getItem('comparisonDecisions');
-                    if (savedDecisions) {
-                        decisions = JSON.parse(savedDecisions);
-                    } else {
-                        decisions = {};
-                    }
+                    // Initialize decisions from the "Correction" column
+                    decisions = {}; // Reset decisions
+                    fullData.forEach((row, index) => {
+                        if (row['Correction'] === 'Accepted' || row['Correction'] === 'Refused') {
+                            decisions[index] = {
+                                status: row['Correction'],
+                                comment: row['Commentaire'] || ''
+                            };
+                        }
+                    });
 
                     document.getElementById('controls').style.display = 'flex';
                     processData(fullData);
