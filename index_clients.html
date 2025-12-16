@@ -374,7 +374,16 @@
             results.vat = compareField(original.vat, corrected.vat);
             if (results.vat.color === 'red') isOverallDifferent = true;
 
-            results.siren = compareField(original.siren, corrected.siren);
+            // SIREN comparison with VAT fallback
+            let originalSiren = original.siren;
+            if (!originalSiren) {
+                const vat = (original.vat || '').replace(/\s/g, '');
+                if (vat.startsWith('FR') && vat.length === 13 && /^\d+$/.test(vat.substring(2))) {
+                    originalSiren = vat.substring(4); // Extract SIREN from FRXXSIREN format
+                }
+            }
+            results.siren = compareField(originalSiren, corrected.siren);
+
             if (row['FLAG SIREN'] === 'ID') {
                 results.siren.color = 'green';
             }
