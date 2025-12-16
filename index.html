@@ -225,16 +225,21 @@
             const card = document.createElement('div');
             card.className = `col s12 card-panel company-card ${overallColor}-border`;
 
+            const decisionData = decisions[index] || {};
+            const acceptBtnClass = decisionData.status === 'Accepted' ? 'grey' : 'green';
+            const refuseBtnClass = decisionData.status === 'Refused' ? 'grey' : 'red';
+            const badgeHtml = decisionData.status ? `<span class="decision-badge ${decisionData.status === 'Accepted' ? 'green' : 'red'}">${decisionData.status === 'Accepted' ? 'Accepté' : 'Refusé'}</span>` : '';
+
             const actions = `
                 <div class="actions">
-                    <button class="btn-small waves-effect waves-light green" id="accept-${index}">Accepter</button>
-                    <button class="btn-small waves-effect waves-light red" id="refuse-${index}">Refuser</button>
+                    <button class="btn-small waves-effect waves-light ${acceptBtnClass}" id="accept-${index}">Accepter</button>
+                    <button class="btn-small waves-effect waves-light ${refuseBtnClass}" id="refuse-${index}">Refuser</button>
                 </div>
             `;
 
             const header = `
                 <div class="card-title-container">
-                    <h5>${row['NAME1'] || row['NAME2']}</h5>
+                    <h5>${row['NAME1'] || row['NAME2']} ${badgeHtml}</h5>
                     ${actions}
                 </div>
                 <p>
@@ -291,8 +296,7 @@
             document.getElementById(`refuse-${index}`).addEventListener('click', () => handleDecision(index, 'Refused'));
             document.getElementById(`comment-${index}`).addEventListener('change', () => handleCommentChange(index));
 
-            // Apply visual feedback for saved decisions
-            updateCardVisuals(index);
+            // No need to call updateCardVisuals anymore, as the component re-renders
         }
 
         function handleDecision(index, newDecision) {
@@ -307,42 +311,13 @@
             }
 
             localStorage.setItem('comparisonDecisions', JSON.stringify(decisions));
-            updateCardVisuals(index);
+            processData(fullData); // Re-render the entire list
         }
 
         function handleCommentChange(index) {
             if (decisions[index]) {
                 decisions[index].comment = document.getElementById(`comment-${index}`).value;
                 localStorage.setItem('comparisonDecisions', JSON.stringify(decisions));
-            }
-        }
-
-        function updateCardVisuals(index) {
-            updateStats();
-            const card = document.querySelector(`#results .col:nth-child(${index + 1}) .card-panel`);
-            if (!card) return;
-
-            const decision = decisions[index] ? decisions[index].status : null;
-
-            const existingBadge = card.querySelector('.decision-badge');
-            if (existingBadge) existingBadge.remove();
-
-            const acceptBtn = card.querySelector(`#accept-${index}`);
-            const refuseBtn = card.querySelector(`#refuse-${index}`);
-
-            // Reset buttons to their default state
-            acceptBtn.className = 'btn-small waves-effect waves-light green';
-            refuseBtn.className = 'btn-small waves-effect waves-light red';
-
-            // Apply new state
-            if (decision === 'Accepted') {
-                const badge = `<span class="decision-badge green">Accepté</span>`;
-                card.querySelector('h5').insertAdjacentHTML('beforeend', badge);
-                acceptBtn.className = 'btn-small waves-effect waves-light grey';
-            } else if (decision === 'Refused') {
-                const badge = `<span class="decision-badge red">Refusé</span>`;
-                card.querySelector('h5').insertAdjacentHTML('beforeend', badge);
-                refuseBtn.className = 'btn-small waves-effect waves-light grey';
             }
         }
 
