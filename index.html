@@ -31,8 +31,21 @@
             margin-top: 15px;
         }
         .actions {
-            float: right;
+            margin-left: auto;
         }
+        .card-title-container {
+            display: flex;
+            align-items: center;
+        }
+        .decision-badge {
+            margin-left: 15px;
+            padding: 5px 10px;
+            border-radius: 5px;
+            color: white;
+            font-size: 1rem;
+        }
+        .decision-badge.green { background-color: #4caf50; }
+        .decision-badge.red { background-color: #f44336; }
         .brand-logo {
             margin-left: 15px;
         }
@@ -80,9 +93,12 @@
                     </div>
                 </div>
             </div>
-            <div class="row">
-                <div class="col s12">
-                    <button id="export-btn" class="btn waves-effect waves-light" style="display:none;">Exporter le résultat</button>
+            <div class="row" id="controls" style="display:none;">
+                <div class="col s4">
+                    <button id="export-btn" class="btn waves-effect waves-light">Exporter le résultat</button>
+                </div>
+                <div class="col s8" id="stats-container">
+                    <!-- Statistics will be injected here -->
                 </div>
             </div>
             <div id="results" class="row">
@@ -124,9 +140,10 @@
             }
 
             const exportData = fullData.map((row, index) => {
-                const decision = decisions[index] || ''; // Default to blank if no decision
+                const decisionData = decisions[index] || {};
                 return {
-                    'Correction': decision,
+                    'Correction': decisionData.status || '',
+                    'Commentaire': decisionData.comment || '',
                     ...row
                 };
             });
@@ -156,7 +173,7 @@
                         decisions = {};
                     }
 
-                    document.getElementById('export-btn').style.display = 'block';
+                    document.getElementById('controls').style.display = 'flex';
                     processData(fullData);
                 };
                 reader.readAsArrayBuffer(file);
@@ -166,6 +183,7 @@
         function processData(data) {
             const resultsContainer = document.getElementById('results');
             resultsContainer.innerHTML = '';
+            updateStats();
 
             data.forEach((row, index) => {
                 const originalStreetParts = extractStreetParts(row['LOCAL_STREET'] || '');
@@ -215,7 +233,10 @@
             `;
 
             const header = `
-                <h5>${row['NAME1'] || row['NAME2']}${actions}</h5>
+                <div class="card-title-container">
+                    <h5>${row['NAME1'] || row['NAME2']}</h5>
+                    ${actions}
+                </div>
                 <p>
                     <strong>Organisation commerciale:</strong> ${row['BUKRS'] || 'N/A'} |
                     <strong>Groupe de comptes:</strong> ${row['KTOKK'] || 'N/A'} |
@@ -239,6 +260,14 @@
                 ${createRow('TVA', comparison.vat)}
             `;
 
+            const comment = decisions[index] ? decisions[index].comment || '' : '';
+            const commentArea = `
+                <div class="input-field col s12">
+                    <textarea id="comment-${index}" class="materialize-textarea">${comment}</textarea>
+                    <label for="comment-${index}">Commentaire</label>
+                </div>
+            `;
+
             card.innerHTML = `
                 ${header}
                 <table class="comparison-table bordered">
@@ -253,38 +282,64 @@
                         ${tableRows}
                     </tbody>
                 </table>
+                ${commentArea}
             `;
             container.appendChild(card);
 
             // Add event listeners
             document.getElementById(`accept-${index}`).addEventListener('click', () => handleDecision(index, 'Accepted'));
             document.getElementById(`refuse-${index}`).addEventListener('click', () => handleDecision(index, 'Refused'));
+            document.getElementById(`comment-${index}`).addEventListener('change', () => handleCommentChange(index));
 
             // Apply visual feedback for saved decisions
             updateCardVisuals(index);
         }
 
-        function handleDecision(index, decision) {
-            decisions[index] = decision;
+        function handleDecision(index, newDecision) {
+            const currentDecision = decisions[index] ? decisions[index].status : null;
+            const comment = document.getElementById(`comment-${index}`).value;
+
+            if (currentDecision === newDecision) {
+                // Toggle off
+                delete decisions[index];
+            } else {
+                decisions[index] = { status: newDecision, comment: comment };
+            }
+
             localStorage.setItem('comparisonDecisions', JSON.stringify(decisions));
             updateCardVisuals(index);
         }
 
+        function handleCommentChange(index) {
+            if (decisions[index]) {
+                decisions[index].comment = document.getElementById(`comment-${index}`).value;
+                localStorage.setItem('comparisonDecisions', JSON.stringify(decisions));
+            }
+        }
+
         function updateCardVisuals(index) {
+            updateStats();
             const card = document.querySelector(`#results .col:nth-child(${index + 1}) .card-panel`);
             if (!card) return;
 
-            // Reset styles
-            card.style.backgroundColor = '';
-            card.querySelector(`#accept-${index}`).classList.remove('disabled');
-            card.querySelector(`#refuse-${index}`).classList.remove('disabled');
+            const decision = decisions[index] ? decisions[index].status : null;
 
-            if (decisions[index] === 'Accepted') {
-                card.style.backgroundColor = '#e8f5e9'; // Light green
-                card.querySelector(`#accept-${index}`).classList.add('disabled');
-            } else if (decisions[index] === 'Refused') {
-                card.style.backgroundColor = '#ffebee'; // Light red
-                card.querySelector(`#refuse-${index}`).classList.add('disabled');
+            // Clear previous state
+            const existingBadge = card.querySelector('.decision-badge');
+            if (existingBadge) existingBadge.remove();
+            card.style.backgroundColor = '';
+            card.querySelector(`#accept-${index}`).classList.remove('green', 'lighten-3');
+            card.querySelector(`#refuse-${index}`).classList.remove('red', 'lighten-3');
+
+
+            if (decision === 'Accepted') {
+                const badge = `<span class="decision-badge green">Accepté</span>`;
+                card.querySelector('h5').insertAdjacentHTML('beforeend', badge);
+                card.querySelector(`#accept-${index}`).classList.add('green', 'lighten-3');
+            } else if (decision === 'Refused') {
+                const badge = `<span class="decision-badge red">Refusé</span>`;
+                card.querySelector('h5').insertAdjacentHTML('beforeend', badge);
+                card.querySelector(`#refuse-${index}`).classList.add('red', 'lighten-3');
             }
         }
 
@@ -469,6 +524,21 @@
                 }
             }
             return { number: '', name: street }; // No number found
+        }
+
+        function updateStats() {
+            const total = fullData.length;
+            const controlled = Object.keys(decisions).length;
+            const accepted = Object.values(decisions).filter(d => d.status === 'Accepted').length;
+            const refused = Object.values(decisions).filter(d => d.status === 'Refused').length;
+
+            const statsHtml = `
+                <span>Total: ${total}</span> |
+                <span>Contrôlés: ${controlled}</span> |
+                <span class="green-text">Acceptés: ${accepted}</span> |
+                <span class="red-text">Refusés: ${refused}</span>
+            `;
+            document.getElementById('stats-container').innerHTML = statsHtml;
         }
 
     </script>
