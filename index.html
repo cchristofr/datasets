@@ -31,7 +31,7 @@
             margin-top: 15px;
         }
         .actions {
-            margin-top: 15px;
+            float: right;
         }
         .brand-logo {
             margin-left: 15px;
@@ -168,10 +168,14 @@
             resultsContainer.innerHTML = '';
 
             data.forEach((row, index) => {
+                const originalStreetParts = extractStreetParts(row['LOCAL_STREET'] || '');
+                const correctedStreetParts = extractStreetParts((row['Primary Address Street Line 2'] || row['Primary Address Street Line 1']) || '');
+
                 const original = {
                     name: row['NAME1'] || row['NAME2'] || '',
                     street_extra: `${row['LOCAL_STR_SUPPL3'] || ''} ${row['LOCAL_STR_SUPPL2'] || ''} ${row['LOCAL_STR_SUPPL1'] || ''}`.trim(),
-                    street: row['LOCAL_STREET'] || '',
+                    street_number: originalStreetParts.number,
+                    street_name: originalStreetParts.name,
                     city: `${row['LOCAL_CITY2'] || ''} ${row['LOCAL_CITY1'] || ''}`.trim(),
                     postal_code: row['LOCAL_POST_CODE1'] || '',
                     country: row['LAND1'] || '',
@@ -183,7 +187,8 @@
                 const corrected = {
                     name: row['Primary Business Name'] || '',
                     street_extra: (row['Primary Address Street Line 2'] ? row['Primary Address Street Line 1'] : '') || '',
-                    street: (row['Primary Address Street Line 2'] || row['Primary Address Street Line 1']) || '',
+                    street_number: correctedStreetParts.number,
+                    street_name: correctedStreetParts.name,
                     city: row['Primary Address Locality Name'] || '',
                     postal_code: row['Organization Primary Address Postal Code'] || '',
                     country: row['Primary Address ISO Alpha 2 Char Country Code'] || '',
@@ -192,7 +197,7 @@
                     vat: row['TVA Code'] || ''
                 };
 
-                const comparison = compareCompanyData(original, corrected);
+                const comparison = compareCompanyData(original, corrected, row);
                 renderComparison(row, comparison, index, resultsContainer);
             });
         }
@@ -202,8 +207,15 @@
             const card = document.createElement('div');
             card.className = `col s12 card-panel company-card ${overallColor}-border`;
 
+            const actions = `
+                <div class="actions">
+                    <button class="btn-small waves-effect waves-light green" id="accept-${index}">Accepter</button>
+                    <button class="btn-small waves-effect waves-light red" id="refuse-${index}">Refuser</button>
+                </div>
+            `;
+
             const header = `
-                <h5>${row['NAME1'] || row['NAME2']}</h5>
+                <h5>${row['NAME1'] || row['NAME2']}${actions}</h5>
                 <p>
                     <strong>Organisation commerciale:</strong> ${row['BUKRS'] || 'N/A'} |
                     <strong>Groupe de comptes:</strong> ${row['KTOKK'] || 'N/A'} |
@@ -217,20 +229,14 @@
             const tableRows = `
                 ${createRow('Raison Sociale', comparison.name)}
                 ${createRow('Complément de rue', comparison.street_extra)}
-                ${createRow('Rue', comparison.street)}
+                ${createRow('Numéro dans la rue', comparison.street_number)}
+                ${createRow('Rue', comparison.street_name)}
                 ${createRow('Code Postal', comparison.postal_code)}
                 ${createRow('Ville', comparison.city)}
                 ${createRow('Pays', comparison.country)}
                 ${createRow('SIREN', comparison.siren, row['FLAG SIREN'])}
                 ${createRow('SIRET', comparison.siret, row['FLAG SIRET'])}
                 ${createRow('TVA', comparison.vat)}
-            `;
-
-            const actions = `
-                <div class="actions">
-                    <button class="btn-small waves-effect waves-light green" id="accept-${index}">Accepter</button>
-                    <button class="btn-small waves-effect waves-light red" id="refuse-${index}">Refuser</button>
-                </div>
             `;
 
             card.innerHTML = `
@@ -247,7 +253,6 @@
                         ${tableRows}
                     </tbody>
                 </table>
-                ${actions}
             `;
             container.appendChild(card);
 
@@ -306,7 +311,7 @@
             return '';
         }
 
-        function compareCompanyData(original, corrected) {
+        function compareCompanyData(original, corrected, row) {
             const results = {};
             let isOverallDifferent = false;
 
@@ -316,13 +321,15 @@
 
             // Address
             results.street_extra = compareField(original.street_extra, corrected.street_extra);
-            results.street = compareField(original.street, corrected.street, { normalizeStreetTypes: true, isStreet: true });
-            results.postal_code = compareField(original.postal_code, corrected.postal_code);
+            results.street_number = compareField(original.street_number, corrected.street_number, { exact: true });
+            results.street_name = compareField(original.street_name, corrected.street_name, { normalizeStreetTypes: true, isStreet: true });
+            results.postal_code = compareField(original.postal_code, corrected.postal_code, { exact: true, removeWhitespace: true });
             results.city = compareField(original.city, corrected.city);
             results.country = compareField(original.country, corrected.country);
 
             const addressChanged = results.street_extra.color === 'red' ||
-                                 results.street.color === 'red' ||
+                                 results.street_number.color === 'red' ||
+                                 results.street_name.color === 'red' ||
                                  results.postal_code.color === 'red' ||
                                  results.city.color === 'red' ||
                                  results.country.color === 'red';
@@ -333,6 +340,9 @@
             if (results.vat.color === 'red') isOverallDifferent = true;
 
             results.siren = compareField(original.siren, corrected.siren);
+            if (row['FLAG SIREN'] === 'ID') {
+                results.siren.color = 'green';
+            }
             results.siret = compareField(original.siret, corrected.siret);
 
 
@@ -352,6 +362,8 @@
             if (normOriginal === normCorrected) {
                 color = 'green';
                 score = 100;
+            } else if (options.exact) {
+                score = 0; // Remains 'red'
             } else if (options.isStreet) {
                 const distance = levenshteinDistance(normOriginal, normCorrected);
                 if (distance < 3) {
@@ -389,7 +401,8 @@
 
 
         function normalizeString(str, options = {}) {
-            if (typeof str !== 'string') return '';
+            if (!str) return '';
+            str = String(str);
 
             let normalized = str.toUpperCase();
             normalized = normalized.normalize("NFD").replace(/[\u0300-\u036f]/g, ""); // Remove accents
@@ -415,7 +428,12 @@
             // General cleanup
             normalized = normalized.replace(/[.,'"]/g, ''); // Remove punctuation
             normalized = normalized.replace(/-/g, ' '); // Treat hyphens as spaces
-            normalized = normalized.replace(/\s+/g, ' ').trim(); // Collapse whitespace
+
+            if (options.removeWhitespace) {
+                normalized = normalized.replace(/\s+/g, '');
+            } else {
+                normalized = normalized.replace(/\s+/g, ' ').trim(); // Collapse whitespace
+            }
 
             return normalized;
         }
@@ -436,6 +454,21 @@
                 }
             }
             return matrix[a.length][b.length];
+        }
+
+        function extractStreetParts(street) {
+            if (typeof street !== 'string') return { number: '', name: '' };
+            const match = street.match(/^(\d+[\s\w,.-]*?)\s+(.*)/);
+            if (match) {
+                // Check if the first part is purely numeric or has bis/ter/etc.
+                const numberPart = match[1].trim();
+                const namePart = match[2].trim();
+                // A simple regex to decide if the first part is a number-like entity
+                if (/^\d+/.test(numberPart)) {
+                    return { number: numberPart, name: namePart };
+                }
+            }
+            return { number: '', name: street }; // No number found
         }
 
     </script>
