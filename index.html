@@ -93,6 +93,12 @@
                     </div>
                 </div>
             </div>
+            <div class="row" id="api-key-container" style="display:none;">
+                <div class="input-field col s12">
+                    <input id="api-key" type="text" placeholder="Entrez votre clé API INSEE ici">
+                    <label for="api-key">Clé API SIRENE</label>
+                </div>
+            </div>
             <div class="row" id="controls" style="display:none;">
                 <div class="col s4">
                     <button id="export-btn" class="btn waves-effect waves-light">Exporter le résultat</button>
@@ -129,6 +135,14 @@
     <script>
         let fullData = [];
         let decisions = {};
+
+        document.getElementById('api-key').addEventListener('keyup', () => {
+            const apiKey = document.getElementById('api-key').value;
+            const buttons = document.querySelectorAll('[id^="sirene-btn-"]');
+            buttons.forEach(btn => {
+                btn.disabled = !apiKey;
+            });
+        });
 
         document.getElementById('file-input').addEventListener('change', handleFile);
         document.getElementById('export-btn').addEventListener('click', exportResult);
@@ -176,6 +190,7 @@
                         }
                     });
 
+                    document.getElementById('api-key-container').style.display = 'block';
                     document.getElementById('controls').style.display = 'flex';
                     processData(fullData);
                 };
@@ -334,7 +349,7 @@
 
             let sireneButtonHtml = '';
             if (label === 'SIRET' && data.original && data.corrected && normalizeString(data.original) !== normalizeString(data.corrected)) {
-                sireneButtonHtml = `<button class="btn-small waves-effect waves-light" onclick="verifySirene(${index}, '${data.original}', '${data.corrected}')" style="margin-left: 10px;">Vérifier SIRENE</button>`;
+                sireneButtonHtml = `<button id="sirene-btn-${index}" class="btn-small waves-effect waves-light" onclick="verifySirene(${index}, '${data.original}', '${data.corrected}')" style="margin-left: 10px;" disabled>Vérifier SIRENE</button>`;
             }
 
             return `
@@ -439,71 +454,85 @@
             };
         }
 
+        async function fetchSireneApi(siret) {
+            const apiKey = document.getElementById('api-key').value;
+            if (!apiKey) {
+                return { ok: false, status: 'NoApiKey' };
+            }
+            const url = `https://api.insee.fr/api-sirene/3.11/siret/${siret.replace(/\s/g, '')}`;
+            try {
+                const response = await fetch(url, {
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-INSEE-Api-Key-Integration': apiKey
+                    }
+                });
+                return response;
+            } catch (error) {
+                // Network or CORS error
+                return { ok: false, status: 'NetworkError' };
+            }
+        }
+
+        function updateBadge(span, text, color = 'red') {
+            span.textContent = text;
+            span.className = `badge ${color} white-text`;
+        }
+
         async function verifySirene(index, originalSiret, correctedSiret) {
-            const apiKey = '7001120a-a0d6-4bc3-88cb-3222c443eace';
             const originalStatusSpan = document.getElementById(`siret-original-status-${index}`);
             const correctedStatusSpan = document.getElementById(`siret-corrected-status-${index}`);
 
-            originalStatusSpan.textContent = 'Vérification...';
-            correctedStatusSpan.textContent = 'Vérification...';
+            updateBadge(originalStatusSpan, 'Vérification...', 'grey');
+            updateBadge(correctedStatusSpan, 'Vérification...', 'grey');
 
             // Verify Original SIRET
-            try {
-                const response = await fetch(`https://api.insee.fr/api-sirene/3.11/siret/${originalSiret.replace(/\s/g, '')}`, {
-                    headers: {
-                        'Authorization': `Bearer ${apiKey}`
-                    }
-                });
-                if (response.ok) {
-                    const data = await response.json();
-                    const latestPeriod = data.etablissement.periodesEtablissement.find(p => p.dateFin === null);
-                    if (latestPeriod && latestPeriod.etatAdministratifEtablissement === 'F') {
-                        originalStatusSpan.textContent = 'Etb Fermé';
-                        originalStatusSpan.className = 'badge red white-text';
-                    } else if (latestPeriod && latestPeriod.etatAdministratifEtablissement === 'A') {
-                        originalStatusSpan.textContent = 'Actif';
-                        originalStatusSpan.className = 'badge green white-text';
-                    } else {
-                        originalStatusSpan.textContent = 'Statut Inconnu';
-                        originalStatusSpan.className = 'badge grey white-text';
-                    }
+            const originalResponse = await fetchSireneApi(originalSiret);
+            if (originalResponse.ok) {
+                const data = await originalResponse.json();
+                const latestPeriod = data.etablissement.periodesEtablissement.find(p => p.dateFin === null);
+                if (latestPeriod && latestPeriod.etatAdministratifEtablissement === 'F') {
+                    updateBadge(originalStatusSpan, 'Etb Fermé', 'red');
+                } else if (latestPeriod && latestPeriod.etatAdministratifEtablissement === 'A') {
+                    updateBadge(originalStatusSpan, 'Actif', 'green');
                 } else {
-                    originalStatusSpan.textContent = 'Erreur API';
-                    originalStatusSpan.className = 'badge red white-text';
+                    updateBadge(originalStatusSpan, 'Statut Inconnu', 'grey');
                 }
-            } catch (error) {
-                originalStatusSpan.textContent = 'Erreur API';
-                originalStatusSpan.className = 'badge red white-text';
+            } else {
+                if (originalResponse.status === 404) {
+                    updateBadge(originalStatusSpan, 'SIRET non trouvé');
+                } else if (originalResponse.status === 'NetworkError') {
+                    updateBadge(originalStatusSpan, 'Erreur Réseau');
+                } else if (originalResponse.status === 'NoApiKey') {
+                    updateBadge(originalStatusSpan, 'Clé API manquante');
+                } else {
+                    updateBadge(originalStatusSpan, `Erreur API (${originalResponse.status})`);
+                }
             }
 
             // Verify Corrected SIRET
-            try {
-                const response = await fetch(`https://api.insee.fr/api-sirene/3.11/siret/${correctedSiret.replace(/\s/g, '')}`, {
-                    headers: {
-                        'Authorization': `Bearer ${apiKey}`
-                    }
-                });
-                if (response.ok) {
-                    const data = await response.json();
-                    const latestPeriod = data.etablissement.periodesEtablissement.find(p => p.dateFin === null);
-                    if (latestPeriod && latestPeriod.etatAdministratifEtablissement === 'A') {
-                        correctedStatusSpan.textContent = 'Actif';
-                        correctedStatusSpan.className = 'badge green white-text';
-                        alert(`Alerte : Le SIRET corrigé (${correctedSiret}) est un établissement actif.`);
-                    } else if (latestPeriod && latestPeriod.etatAdministratifEtablissement === 'F') {
-                        correctedStatusSpan.textContent = 'Etb Fermé';
-                        correctedStatusSpan.className = 'badge red white-text';
-                    } else {
-                        correctedStatusSpan.textContent = 'Statut Inconnu';
-                        correctedStatusSpan.className = 'badge grey white-text';
-                    }
+            const correctedResponse = await fetchSireneApi(correctedSiret);
+            if (correctedResponse.ok) {
+                const data = await correctedResponse.json();
+                const latestPeriod = data.etablissement.periodesEtablissement.find(p => p.dateFin === null);
+                if (latestPeriod && latestPeriod.etatAdministratifEtablissement === 'A') {
+                    updateBadge(correctedStatusSpan, 'Actif', 'green');
+                    alert(`Alerte : Le SIRET corrigé (${correctedSiret}) est un établissement actif.`);
+                } else if (latestPeriod && latestPeriod.etatAdministratifEtablissement === 'F') {
+                    updateBadge(correctedStatusSpan, 'Etb Fermé', 'red');
                 } else {
-                    correctedStatusSpan.textContent = 'Erreur API';
-                    correctedStatusSpan.className = 'badge red white-text';
+                    updateBadge(correctedStatusSpan, 'Statut Inconnu', 'grey');
                 }
-            } catch (error) {
-                correctedStatusSpan.textContent = 'Erreur API';
-                correctedStatusSpan.className = 'badge red white-text';
+            } else {
+                if (correctedResponse.status === 404) {
+                    updateBadge(correctedStatusSpan, 'SIRET non trouvé');
+                } else if (correctedResponse.status === 'NetworkError') {
+                    updateBadge(correctedStatusSpan, 'Erreur Réseau');
+                } else if (correctedResponse.status === 'NoApiKey') {
+                    updateBadge(correctedStatusSpan, 'Clé API manquante');
+                } else {
+                    updateBadge(correctedStatusSpan, `Erreur API (${correctedResponse.status})`);
+                }
             }
         }
 
