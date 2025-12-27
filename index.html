@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Comparateur de données d'entreprise</title>
+    <!-- MaterializeCSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+        main {
+            flex: 1 0 auto;
+        }
+        .container {
+            margin-top: 20px;
+        }
+        .file-field .btn {
+            background-color: #26a69a;
+        }
+        #results {
+            margin-top: 20px;
+        }
+        .card-panel {
+            margin-bottom: 20px;
+        }
+        .comparison-table {
+            margin-top: 15px;
+        }
+        .actions {
+            margin-left: auto;
+        }
+        .card-title-container {
+            display: flex;
+            align-items: center;
+        }
+        .decision-badge {
+            margin-left: 15px;
+            padding: 5px 10px;
+            border-radius: 5px;
+            color: white;
+            font-size: 1rem;
+        }
+        .decision-badge.green { background-color: #4caf50; }
+        .decision-badge.red { background-color: #f44336; }
+        .brand-logo {
+            margin-left: 15px;
+        }
+        .company-card {
+            margin-bottom: 30px !important;
+            border-left: 5px solid;
+        }
+        .red-border { border-color: #f44336; }
+        .green-border { border-color: #4caf50; }
+        .comparison-table td.red { background-color: #f44336; color: white; font-weight: bold; }
+        .comparison-table td.orange { background-color: #ff9800; color: white; }
+        .comparison-table td.green { background-color: #4caf50; color: white; }
+        .comparison-table .badge {
+            font-size: 0.8rem;
+            padding: 5px;
+            border-radius: 5px;
+            color: white;
+        }
+        .comparison-table .badge.green-text { background-color: #4caf50; }
+        .comparison-table .badge.red-text { background-color: #f44336; }
+
+    </style>
+</head>
+<body>
+    <header>
+        <nav>
+            <div class="nav-wrapper">
+                <a href="#" class="brand-logo">Outil de Comparaison</a>
+            </div>
+        </nav>
+    </header>
+    <main>
+        <div class="container">
+            <div class="row">
+                <div class="col s12">
+                    <h4>Importer un fichier Excel</h4>
+                    <div class="file-field input-field">
+                        <div class="btn">
+                            <span>Fichier</span>
+                            <input type="file" id="file-input" accept=".xlsx, .xls">
+                        </div>
+                        <div class="file-path-wrapper">
+                            <input class="file-path validate" type="text" placeholder="Téléchargez votre fichier ici">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="row" id="api-key-container" style="display:none;">
+                <div class="input-field col s12">
+                    <input id="api-key" type="text" placeholder="Entrez votre clé API INSEE ici">
+                    <label for="api-key">Clé API SIRENE</label>
+                </div>
+            </div>
+            <div class="row" id="controls" style="display:none;">
+                <div class="col s4">
+                    <button id="export-btn" class="btn waves-effect waves-light">Exporter le résultat</button>
+                </div>
+                <div class="col s8" id="stats-container">
+                    <!-- Statistics will be injected here -->
+                </div>
+            </div>
+            <div id="results" class="row">
+                <!-- Les résultats de la comparaison seront affichés ici -->
+            </div>
+        </div>
+    </main>
+    <footer class="page-footer">
+        <div class="container">
+            <div class="row">
+                <div class="col l6 s12">
+                    <h5 class="white-text">Comparateur</h5>
+                    <p class="grey-text text-lighten-4">Application pour comparer les données d'entreprise.</p>
+                </div>
+            </div>
+        </div>
+        <div class="footer-copyright">
+            <div class="container">
+            © 2024
+            </div>
+        </div>
+    </footer>
+
+    <!-- Scripts -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/fuzzball@2.1.2/dist/fuzzball.umd.min.js"></script>
+    <script>
+        let fullData = [];
+        let decisions = {};
+
+        document.getElementById('api-key').addEventListener('keyup', () => {
+            const apiKey = document.getElementById('api-key').value;
+            const buttons = document.querySelectorAll('[id^="sirene-btn-"]');
+            buttons.forEach(btn => {
+                btn.disabled = !apiKey;
+            });
+        });
+
+        document.getElementById('file-input').addEventListener('change', handleFile);
+        document.getElementById('export-btn').addEventListener('click', exportResult);
+
+        function exportResult() {
+            if (fullData.length === 0) {
+                M.toast({html: 'Aucune donnée à exporter'});
+                return;
+            }
+
+            const exportData = fullData.map((row, index) => {
+                const decisionData = decisions[index] || {};
+                return {
+                    'Correction': decisionData.status || '',
+                    'Commentaire': decisionData.comment || '',
+                    ...row
+                };
+            });
+
+            const worksheet = XLSX.utils.json_to_sheet(exportData);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, 'Résultats');
+            XLSX.writeFile(workbook, 'resultat_correction.xlsx');
+        }
+
+        function handleFile(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, {type: 'array'});
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    fullData = XLSX.utils.sheet_to_json(worksheet);
+
+                    // Initialize decisions from the "Correction" column
+                    decisions = {}; // Reset decisions
+                    fullData.forEach((row, index) => {
+                        if (row['Correction'] === 'Accepted' || row['Correction'] === 'Refused') {
+                            decisions[index] = {
+                                status: row['Correction'],
+                                comment: row['Commentaire'] || ''
+                            };
+                        }
+                    });
+
+                    document.getElementById('api-key-container').style.display = 'block';
+                    document.getElementById('controls').style.display = 'flex';
+                    processData(fullData);
+                };
+                reader.readAsArrayBuffer(file);
+            }
+        }
+
+        function processData(data) {
+            const resultsContainer = document.getElementById('results');
+            resultsContainer.innerHTML = '';
+            updateStats();
+
+            data.forEach((row, index) => {
+                const originalStreetParts = extractStreetParts(row['LOCAL_STREET'] || '');
+                const correctedStreetParts = extractStreetParts((row['Primary Address Street Line 2'] || row['Primary Address Street Line 1']) || '');
+
+                const original = {
+                    name: row['NAME1'] || row['NAME2'] || '',
+                    street_extra: `${row['LOCAL_STR_SUPPL3'] || ''} ${row['LOCAL_STR_SUPPL2'] || ''} ${row['LOCAL_STR_SUPPL1'] || ''}`.trim(),
+                    street_number: originalStreetParts.number,
+                    street_name: originalStreetParts.name,
+                    city: `${row['LOCAL_CITY2'] || ''} ${row['LOCAL_CITY1'] || ''}`.trim(),
+                    postal_code: row['LOCAL_POST_CODE1'] || '',
+                    country: row['LAND1'] || '',
+                    siret: row['STCD1'] || '',
+                    siren: row['STCD2'] || '',
+                    vat: row['FOUR_TAX'] || ''
+                };
+
+                const corrected = {
+                    name: row['Primary Business Name'] || '',
+                    street_extra: (row['Primary Address Street Line 2'] ? row['Primary Address Street Line 1'] : '') || '',
+                    street_number: correctedStreetParts.number,
+                    street_name: correctedStreetParts.name,
+                    city: row['Primary Address Locality Name'] || '',
+                    postal_code: row['Organization Primary Address Postal Code'] || '',
+                    country: row['Primary Address ISO Alpha 2 Char Country Code'] || '',
+                    siret: getRegistrationNumber(row, 'SIRET (FR)'),
+                    siren: getRegistrationNumber(row, 'SIREN (FR)'),
+                    vat: row['TVA Code'] || ''
+                };
+
+                const comparison = compareCompanyData(original, corrected, row);
+                renderComparison(row, comparison, index, resultsContainer);
+            });
+        }
+
+        function renderComparison(row, comparison, index, container) {
+            const overallColor = comparison.overallColor;
+            const card = document.createElement('div');
+            card.className = `col s12 card-panel company-card ${overallColor}-border`;
+
+            const decisionData = decisions[index] || {};
+            const acceptBtnClass = decisionData.status === 'Accepted' ? 'grey' : 'green';
+            const refuseBtnClass = decisionData.status === 'Refused' ? 'grey' : 'red';
+            const badgeHtml = decisionData.status ? `<span class="decision-badge ${decisionData.status === 'Accepted' ? 'green' : 'red'}">${decisionData.status === 'Accepted' ? 'Accepté' : 'Refusé'}</span>` : '';
+
+            const actions = `
+                <div class="actions">
+                    <button class="btn-small waves-effect waves-light ${acceptBtnClass}" id="accept-${index}">Accepter</button>
+                    <button class="btn-small waves-effect waves-light ${refuseBtnClass}" id="refuse-${index}">Refuser</button>
+                </div>
+            `;
+
+            const header = `
+                <div class="card-title-container">
+                    <h5>${row['NAME1'] || row['NAME2']} ${badgeHtml}</h5>
+                    ${actions}
+                </div>
+                <p>
+                    <strong>Organisation commerciale:</strong> ${row['BUKRS'] || 'N/A'} |
+                    <strong>Groupe de comptes:</strong> ${row['KTOKK'] || 'N/A'} |
+                    <strong>Type de fournisseur:</strong> ${row['KTOKK'] || 'N/A'} |
+                    <strong>ID SAP:</strong> ${row['LIFNR'] || 'N/A'} |
+                    <strong>Date création:</strong> ${row['ERDAT'] || 'N/A'} |
+                    <strong>Dernier événement:</strong> ${row['LAST_EVENT'] || 'N/A'}
+                </p>
+            `;
+
+            const tableRows = `
+                ${createRow('Raison Sociale', comparison.name)}
+                ${createRow('Complément de rue', comparison.street_extra)}
+                ${createRow('Numéro dans la rue', comparison.street_number)}
+                ${createRow('Rue', comparison.street_name)}
+                ${createRow('Code Postal', comparison.postal_code)}
+                ${createRow('Ville', comparison.city)}
+                ${createRow('Pays', comparison.country)}
+                ${createRow('SIREN', comparison.siren, row['FLAG SIREN'])}
+                ${createRow('SIRET', comparison.siret, row['FLAG SIRET'], index)}
+                ${createRow('TVA', comparison.vat)}
+            `;
+
+            const comment = decisions[index] ? decisions[index].comment || '' : '';
+            const commentArea = `
+                <div class="input-field col s12">
+                    <textarea id="comment-${index}" class="materialize-textarea">${comment}</textarea>
+                    <label for="comment-${index}">Commentaire</label>
+                </div>
+            `;
+
+            card.innerHTML = `
+                ${header}
+                <table class="comparison-table bordered">
+                    <thead>
+                        <tr>
+                            <th>Champ</th>
+                            <th>Original</th>
+                            <th>Corrigé</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${tableRows}
+                    </tbody>
+                </table>
+                ${commentArea}
+            `;
+            container.appendChild(card);
+
+            // Add event listeners
+            document.getElementById(`accept-${index}`).addEventListener('click', () => handleDecision(index, 'Accepted'));
+            document.getElementById(`refuse-${index}`).addEventListener('click', () => handleDecision(index, 'Refused'));
+            document.getElementById(`comment-${index}`).addEventListener('change', () => handleCommentChange(index));
+
+            // No need to call updateCardVisuals anymore, as the component re-renders
+        }
+
+        function handleDecision(index, newDecision) {
+            const currentDecision = decisions[index] ? decisions[index].status : null;
+            const comment = document.getElementById(`comment-${index}`).value;
+
+            if (currentDecision === newDecision) {
+                // Toggle off
+                delete decisions[index];
+            } else {
+                decisions[index] = { status: newDecision, comment: comment };
+            }
+
+            localStorage.setItem('comparisonDecisions', JSON.stringify(decisions));
+            processData(fullData); // Re-render the entire list
+        }
+
+        function handleCommentChange(index) {
+            if (decisions[index]) {
+                decisions[index].comment = document.getElementById(`comment-${index}`).value;
+                localStorage.setItem('comparisonDecisions', JSON.stringify(decisions));
+            }
+        }
+
+        function createRow(label, data, flag, index) {
+            let flagHtml = '';
+            if (flag) {
+                const flagColor = flag === 'ID' ? 'green-text' : 'red-text';
+                const flagText = flag === 'ID' ? flag : 'Vide';
+                flagHtml = ` <span class="badge ${flagColor}">${flagText}</span>`;
+            }
+
+            let sireneButtonHtml = '';
+            if (label === 'SIRET' && data.original && data.corrected && normalizeString(data.original) !== normalizeString(data.corrected)) {
+                sireneButtonHtml = `<button id="sirene-btn-${index}" class="btn-small waves-effect waves-light" onclick="verifySirene(${index}, '${data.original}', '${data.corrected}')" style="margin-left: 10px;" disabled>Vérifier SIRENE</button>`;
+            }
+
+            return `
+                <tr>
+                    <td>${label}${flagHtml}${sireneButtonHtml}</td>
+                    <td>${data.original} <span id="siret-original-status-${index}"></span></td>
+                    <td class="${data.color}">${data.corrected} <span id="siret-corrected-status-${index}"></span></td>
+                </tr>
+            `;
+        }
+
+        function getRegistrationNumber(row, type) {
+            if (row['Registration Number 1 Type Desc'] === type) return row['Registration Number 1'];
+            if (row['Registration Number 2 Type Desc'] === type) return row['Registration Number 2'];
+            return '';
+        }
+
+        function compareCompanyData(original, corrected, row) {
+            const results = {};
+            let isOverallDifferent = false;
+
+            // Name
+            results.name = compareField(original.name, corrected.name, { removeArticles: true, removeCompanyTypes: true });
+            if (results.name.color === 'red') isOverallDifferent = true;
+
+            // Address
+            results.street_extra = compareField(original.street_extra, corrected.street_extra);
+            results.street_number = compareField(original.street_number, corrected.street_number, { exact: true });
+            results.street_name = compareField(original.street_name, corrected.street_name, { normalizeStreetTypes: true, isStreet: true });
+            results.postal_code = compareField(original.postal_code, corrected.postal_code, { exact: true, removeWhitespace: true });
+            results.city = compareField(original.city, corrected.city);
+            results.country = compareField(original.country, corrected.country);
+
+            const addressChanged = results.street_extra.color === 'red' ||
+                                 results.street_number.color === 'red' ||
+                                 results.street_name.color === 'red' ||
+                                 results.postal_code.color === 'red' ||
+                                 results.city.color === 'red' ||
+                                 results.country.color === 'red';
+            if (addressChanged) isOverallDifferent = true;
+
+            // IDs
+            results.vat = compareField(original.vat, corrected.vat);
+            if (results.vat.color === 'red') isOverallDifferent = true;
+
+            // SIREN comparison with VAT fallback
+            let originalSiren = original.siren;
+            if (!originalSiren) {
+                const vat = (original.vat || '').replace(/\s/g, '');
+                if (vat.startsWith('FR') && vat.length === 13 && /^\d+$/.test(vat.substring(2))) {
+                    originalSiren = vat.substring(4); // Extract SIREN from FRXXSIREN format
+                }
+            }
+            results.siren = compareField(originalSiren, corrected.siren);
+
+            if (row['FLAG SIREN'] === 'ID') {
+                results.siren.color = 'green';
+            }
+            results.siret = compareField(original.siret, corrected.siret);
+
+
+            // Final result
+            results.overallColor = isOverallDifferent ? 'red' : 'green';
+
+            return results;
+        }
+
+        function compareField(original, corrected, options = {}) {
+            const normOriginal = normalizeString(original, options);
+            const normCorrected = normalizeString(corrected, options);
+
+            let color = 'red';
+            let score = 0;
+
+            if (normOriginal === normCorrected) {
+                color = 'green';
+                score = 100;
+            } else if (options.exact) {
+                score = 0; // Remains 'red'
+            } else if (options.isStreet) {
+                const distance = levenshteinDistance(normOriginal, normCorrected);
+                if (distance < 3) {
+                    color = 'green'; // Considered identical
+                }
+                score = distance; // For streets, score is the distance
+            } else {
+                score = fuzzball.token_set_ratio(normOriginal, normCorrected);
+                if (score > 95) {
+                    color = 'green';
+                } else if (score > 70) {
+                    color = 'orange';
+                }
+            }
+
+            return {
+                original,
+                corrected,
+                normOriginal,
+                normCorrected,
+                score,
+                color
+            };
+        }
+
+        async function fetchSireneApi(siret) {
+            const apiKey = document.getElementById('api-key').value;
+            if (!apiKey) {
+                return { ok: false, status: 'NoApiKey' };
+            }
+            const url = `https://api.insee.fr/api-sirene/3.11/siret/${siret.replace(/\s/g, '')}`;
+            try {
+                const response = await fetch(url, {
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-INSEE-Api-Key-Integration': apiKey
+                    }
+                });
+                return response;
+            } catch (error) {
+                // Network or CORS error
+                return { ok: false, status: 'NetworkError' };
+            }
+        }
+
+        function updateBadge(span, text, color = 'red') {
+            span.textContent = text;
+            span.className = `badge ${color} white-text`;
+        }
+
+        async function verifySirene(index, originalSiret, correctedSiret) {
+            const originalStatusSpan = document.getElementById(`siret-original-status-${index}`);
+            const correctedStatusSpan = document.getElementById(`siret-corrected-status-${index}`);
+
+            updateBadge(originalStatusSpan, 'Vérification...', 'grey');
+            updateBadge(correctedStatusSpan, 'Vérification...', 'grey');
+
+            // Verify Original SIRET
+            const originalResponse = await fetchSireneApi(originalSiret);
+            if (originalResponse.ok) {
+                const data = await originalResponse.json();
+                const latestPeriod = data.etablissement.periodesEtablissement.find(p => p.dateFin === null);
+                if (latestPeriod && latestPeriod.etatAdministratifEtablissement === 'F') {
+                    updateBadge(originalStatusSpan, 'Etb Fermé', 'red');
+                } else if (latestPeriod && latestPeriod.etatAdministratifEtablissement === 'A') {
+                    updateBadge(originalStatusSpan, 'Actif', 'green');
+                } else {
+                    updateBadge(originalStatusSpan, 'Statut Inconnu', 'grey');
+                }
+            } else {
+                if (originalResponse.status === 404) {
+                    updateBadge(originalStatusSpan, 'SIRET non trouvé');
+                } else if (originalResponse.status === 'NetworkError') {
+                    updateBadge(originalStatusSpan, 'Erreur Réseau');
+                } else if (originalResponse.status === 'NoApiKey') {
+                    updateBadge(originalStatusSpan, 'Clé API manquante');
+                } else {
+                    updateBadge(originalStatusSpan, `Erreur API (${originalResponse.status})`);
+                }
+            }
+
+            // Verify Corrected SIRET
+            const correctedResponse = await fetchSireneApi(correctedSiret);
+            if (correctedResponse.ok) {
+                const data = await correctedResponse.json();
+                const latestPeriod = data.etablissement.periodesEtablissement.find(p => p.dateFin === null);
+                if (latestPeriod && latestPeriod.etatAdministratifEtablissement === 'A') {
+                    updateBadge(correctedStatusSpan, 'Actif', 'green');
+                    alert(`Alerte : Le SIRET corrigé (${correctedSiret}) est un établissement actif.`);
+                } else if (latestPeriod && latestPeriod.etatAdministratifEtablissement === 'F') {
+                    updateBadge(correctedStatusSpan, 'Etb Fermé', 'red');
+                } else {
+                    updateBadge(correctedStatusSpan, 'Statut Inconnu', 'grey');
+                }
+            } else {
+                if (correctedResponse.status === 404) {
+                    updateBadge(correctedStatusSpan, 'SIRET non trouvé');
+                } else if (correctedResponse.status === 'NetworkError') {
+                    updateBadge(correctedStatusSpan, 'Erreur Réseau');
+                } else if (correctedResponse.status === 'NoApiKey') {
+                    updateBadge(correctedStatusSpan, 'Clé API manquante');
+                } else {
+                    updateBadge(correctedStatusSpan, `Erreur API (${correctedResponse.status})`);
+                }
+            }
+        }
+
+        // --- Data Normalization Functions ---
+
+        const ARTICLES = ['le', 'la', 'les', 'l\'', 'd\'', 'un', 'une', 'des', 'du', 'de la', 'de l’', 'des', 'au', 'aux'];
+        const COMPANY_TYPES = {
+            'AE': 'Auto-entrepreneur', 'EI': 'Entreprise individuelle', 'EIRL': 'Entreprise individuelle à responsabilité limitée', 'EURL': 'Entreprise unipersonnelle à responsabilité limitée', 'SARL': 'Société à responsabilité limitée', 'SA': 'Société anonyme', 'SAS': 'Société par actions simplifiée', 'SASU': 'Société par actions simplifiée unipersonnelle', 'SNC': 'Société en nom collectif', 'SCS': 'Société en commandite simple', 'SCA': 'Société en commandite par actions', 'SCI': 'Société civile immobilière', 'SC': 'Société civile', 'SCM': 'Société civile de moyens', 'SCIC': 'Société coopérative d’intérêt collectif', 'SCOP': 'Société coopérative de production', 'SCP': 'Société civile professionnelle', 'SEL': 'Société d’exercice libéral', 'SELARL': 'Société d’exercice libéral à responsabilité limitée', 'SELAS': 'Société d’exercice libéral par actions simplifiée', 'SELAFA': 'Société d’exercice libéral à forme anonyme', 'SEM': 'Société d’économie mixte', 'SEML': 'Société d’économie mixte locale', 'SEP': 'Société en participation', 'GAEC': 'Groupement agricole d’exploitation en commun', 'GIE': 'Groupement d’intérêt économique', 'GEIE': 'Groupement européen d’intérêt économique', 'SICA': 'Société d’intérêt collectif agricole', 'SPFPL': 'Société de participations financières de professions libérales', 'SUP': 'Societas unius personae'
+        };
+        const STREET_TYPES = {
+            'ALL': 'Allée', 'AV': 'Avenue', 'BD': 'Boulevard', 'CHEM': 'Chemin', 'CHE': 'Chemin', 'CITE': 'Cité', 'IMP': 'Impasse', 'PAS': 'Passage', 'PL': 'Place', 'RPT': 'Rond-point', 'RTE': 'Route', 'VOIE': 'Voie', 'SQ': 'Square', 'RES': 'Résidence', 'DOM': 'Domaine', 'SENT': 'Sentier', 'PARC': 'Parc', 'CHAUS': 'Chaussée', 'LD': 'Lieu-dit', 'LOT': 'Lotissement', 'CTRE': 'Centre', 'CCAL': 'Centre commercial', 'IMM': 'Immeuble', 'VLGE': 'Village', 'ZA': 'Zone d’activité', 'ZAC': 'Zone d’aménagement concerté', 'ZAD': 'Zone d’aménagement différé', 'ZI': 'Zone industrielle'
+        };
+
+
+        function normalizeString(str, options = {}) {
+            if (!str) return '';
+            str = String(str);
+
+            let normalized = str.toUpperCase();
+            normalized = normalized.normalize("NFD").replace(/[\u0300-\u036f]/g, ""); // Remove accents
+
+            if (options.removeArticles) {
+                const articlesRegex = new RegExp('\\b(' + ARTICLES.join('|') + ')\\b', 'gi');
+                normalized = normalized.replace(articlesRegex, '');
+            }
+
+            if (options.removeCompanyTypes) {
+                const companyTypesRegex = new RegExp('\\b(' + Object.keys(COMPANY_TYPES).concat(Object.values(COMPANY_TYPES)).join('|').replace(/\s/g, '\\s') + ')\\b', 'gi');
+                normalized = normalized.replace(companyTypesRegex, '');
+            }
+
+            if (options.normalizeStreetTypes) {
+                Object.keys(STREET_TYPES).forEach(abbr => {
+                    const full = STREET_TYPES[abbr].toUpperCase();
+                    const abbrRegex = new RegExp('\\b' + abbr + '\\b', 'g');
+                    normalized = normalized.replace(abbrRegex, full);
+                });
+            }
+
+            // General cleanup
+            normalized = normalized.replace(/[.,'"]/g, ''); // Remove punctuation
+            normalized = normalized.replace(/-/g, ' '); // Treat hyphens as spaces
+
+            if (options.removeWhitespace) {
+                normalized = normalized.replace(/\s+/g, '');
+            } else {
+                normalized = normalized.replace(/\s+/g, ' ').trim(); // Collapse whitespace
+            }
+
+            return normalized;
+        }
+
+        function levenshteinDistance(a, b) {
+            if (!a || !b) return (a || b).length;
+            const matrix = Array.from(Array(a.length + 1), () => Array(b.length + 1).fill(0));
+            for (let i = 0; i <= a.length; i++) matrix[i][0] = i;
+            for (let j = 0; j <= b.length; j++) matrix[0][j] = j;
+            for (let i = 1; i <= a.length; i++) {
+                for (let j = 1; j <= b.length; j++) {
+                    const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+                    matrix[i][j] = Math.min(
+                        matrix[i - 1][j] + 1,        // Deletion
+                        matrix[i][j - 1] + 1,        // Insertion
+                        matrix[i - 1][j - 1] + cost  // Substitution
+                    );
+                }
+            }
+            return matrix[a.length][b.length];
+        }
+
+        function extractStreetParts(street) {
+            if (typeof street !== 'string') return { number: '', name: '' };
+            const match = street.match(/^(\d+[\s\w,.-]*?)\s+(.*)/);
+            if (match) {
+                // Check if the first part is purely numeric or has bis/ter/etc.
+                const numberPart = match[1].trim();
+                const namePart = match[2].trim();
+                // A simple regex to decide if the first part is a number-like entity
+                if (/^\d+/.test(numberPart)) {
+                    return { number: numberPart, name: namePart };
+                }
+            }
+            return { number: '', name: street }; // No number found
+        }
+
+        function updateStats() {
+            const total = fullData.length;
+            const controlled = Object.keys(decisions).length;
+            const accepted = Object.values(decisions).filter(d => d.status === 'Accepted').length;
+            const refused = Object.values(decisions).filter(d => d.status === 'Refused').length;
+
+            const statsHtml = `
+                <span>Total: ${total}</span> |
+                <span>Contrôlés: ${controlled}</span> |
+                <span class="green-text">Acceptés: ${accepted}</span> |
+                <span class="red-text">Refusés: ${refused}</span>
+            `;
+            document.getElementById('stats-container').innerHTML = statsHtml;
+        }
+
+    </script>
+</body>
+</html>
